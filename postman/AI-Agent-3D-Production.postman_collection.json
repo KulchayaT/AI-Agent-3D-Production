@@ -1,80 +1,117 @@
 {
   "info": {
     "name": "AI Agent 3D Production - QA API",
-    "description": "Section 4.2 test scenarios T1-T5 plus health and job tracker. Start the API first: uvicorn api.main:app --reload",
+    "description": "Report 4.1 UI-Model interface: assess, feedback, health, jobs. Start the API first: uvicorn api.main:app --reload",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [{ "key": "base_url", "value": "http://127.0.0.1:8000" }],
   "item": [
     {
       "name": "Health",
-      "request": { "method": "GET", "url": "{{base_url}}/v1/health" },
+      "request": { "method": "GET", "url": "{{base_url}}/api/v1/health" },
       "event": [{ "listen": "test", "script": { "exec": [
         "pm.test('200 and model ready', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().model_ready).to.eql(true); });"
       ] } }]
     },
     {
-      "name": "T1 raw Tripo mesh -> FAIL",
+      "name": "T1 raw Tripo mesh -> FAIL, back to Modeler C (automate)",
       "request": {
-        "method": "POST", "url": "{{base_url}}/v1/assess",
+        "method": "POST", "url": "{{base_url}}/api/v1/assets/assess",
         "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": { "mode": "raw", "raw": "{\n  \"asset_id\": \"char_tripo_raw\",\n  \"file_url\": \"samples/char_tripo_raw.glb\",\n  \"context\": {\"platform\": \"PC\", \"engine\": \"UE5\", \"asset_role\": \"hero_character\"}\n}" }
+        "body": { "mode": "raw", "raw": "{\n  \"request_id\": \"3f2b9c1e-7a44-4d0b-9c61-0d5e8a7b2f10\",\n  \"job_id\": \"job-0042\",\n  \"asset_id\": \"char_cat_01\",\n  \"timestamp\": \"2026-11-22T09:30:00Z\",\n  \"attempt\": 1,\n  \"mesh\": {\"file_url\": \"samples/char_tripo_raw.glb\", \"format\": \"glb\"},\n  \"context\": {\"platform\": \"PC\", \"engine\": \"UE5\", \"asset_role\": \"hero_character\", \"target_fps\": 60},\n  \"options\": {\"explain\": true, \"top_k_reasons\": 3}\n}" }
       },
       "event": [{ "listen": "test", "script": { "exec": [
         "const b = pm.response.json();",
-        "pm.test('200 FAIL', () => { pm.response.to.have.status(200); pm.expect(b.status).to.eql('FAIL'); });",
-        "pm.test('UV fragmented issue sent to 3D Modeler C', () => { pm.expect(b.issues.map(i => i.code)).to.include('UV_FRAGMENTED'); pm.expect(b.next_action.agent).to.eql('3d_modeler_c'); });"
+        "pm.test('200 FAIL', () => { pm.response.to.have.status(200); pm.expect(b.verdict).to.eql('FAIL'); });",
+        "pm.test('request_id echoed', () => pm.expect(b.request_id).to.eql('3f2b9c1e-7a44-4d0b-9c61-0d5e8a7b2f10'));",
+        "pm.test('UV fragmented, automate back to 3D Modeler C', () => { pm.expect(b.issues.map(i => i.code)).to.include('UV_FRAGMENTED'); pm.expect(b.next_action.agent).to.eql('3d_modeler_c'); pm.expect(b.next_action.recommended_action).to.eql('automate'); });"
       ] } }]
     },
     {
-      "name": "T2 mesh after Modeler C -> PASS",
+      "name": "T1b third attempt -> needs_review (prompt a human TA)",
       "request": {
-        "method": "POST", "url": "{{base_url}}/v1/assess",
+        "method": "POST", "url": "{{base_url}}/api/v1/assets/assess",
         "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": { "mode": "raw", "raw": "{\n  \"asset_id\": \"char_fixed\",\n  \"file_url\": \"samples/char_fixed.glb\",\n  \"context\": {\"platform\": \"PC\", \"engine\": \"UE5\", \"asset_role\": \"hero_character\"}\n}" }
+        "body": { "mode": "raw", "raw": "{\n  \"request_id\": \"3f2b9c1e-7a44-4d0b-9c61-0d5e8a7b2f11\",\n  \"job_id\": \"job-0042\",\n  \"asset_id\": \"char_cat_01\",\n  \"timestamp\": \"2026-11-22T09:40:00Z\",\n  \"attempt\": 3,\n  \"mesh\": {\"file_url\": \"samples/char_tripo_raw.glb\", \"format\": \"glb\"},\n  \"context\": {\"platform\": \"PC\", \"asset_role\": \"hero_character\"}\n}" }
       },
       "event": [{ "listen": "test", "script": { "exec": [
         "const b = pm.response.json();",
-        "pm.test('200 PASS score >= 80', () => { pm.response.to.have.status(200); pm.expect(b.status).to.eql('PASS'); pm.expect(b.readiness_score).to.be.at.least(80); });"
+        "pm.test('needs_review + prompt', () => { pm.expect(b.status).to.eql('needs_review'); pm.expect(b.next_action.recommended_action).to.eql('prompt'); });"
       ] } }]
     },
     {
-      "name": "T3 missing context.platform -> 400",
+      "name": "T2 mesh after Modeler C -> PASS (annotate)",
       "request": {
-        "method": "POST", "url": "{{base_url}}/v1/assess",
+        "method": "POST", "url": "{{base_url}}/api/v1/assets/assess",
         "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": { "mode": "raw", "raw": "{\n  \"asset_id\": \"char_fixed\",\n  \"file_url\": \"samples/char_fixed.glb\",\n  \"context\": {\"engine\": \"UE5\", \"asset_role\": \"hero_character\"}\n}" }
+        "body": { "mode": "raw", "raw": "{\n  \"request_id\": \"3f2b9c1e-7a44-4d0b-9c61-0d5e8a7b2f12\",\n  \"job_id\": \"job-0042\",\n  \"asset_id\": \"char_cat_01\",\n  \"timestamp\": \"2026-11-22T09:50:00Z\",\n  \"attempt\": 2,\n  \"mesh\": {\"file_url\": \"samples/char_fixed.glb\", \"format\": \"glb\"},\n  \"context\": {\"platform\": \"PC\", \"engine\": \"UE5\", \"asset_role\": \"hero_character\"}\n}" }
       },
       "event": [{ "listen": "test", "script": { "exec": [
-        "pm.test('400 names the field', () => { pm.response.to.have.status(400); pm.expect(JSON.stringify(pm.response.json().error.details)).to.include('context.platform'); });"
+        "const b = pm.response.json();",
+        "pm.test('200 PASS score >= 80', () => { pm.response.to.have.status(200); pm.expect(b.verdict).to.eql('PASS'); pm.expect(b.readiness_score).to.be.at.least(80); });",
+        "pm.test('annotate', () => pm.expect(b.next_action.recommended_action).to.eql('annotate'));"
+      ] } }]
+    },
+    {
+      "name": "T3 missing context.platform -> 400 MISSING_FIELD",
+      "request": {
+        "method": "POST", "url": "{{base_url}}/api/v1/assets/assess",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"request_id\": \"3f2b9c1e-7a44-4d0b-9c61-0d5e8a7b2f13\",\n  \"job_id\": \"job-0042\",\n  \"asset_id\": \"char_cat_01\",\n  \"timestamp\": \"2026-11-22T09:30:00Z\",\n  \"mesh\": {\"file_url\": \"samples/char_fixed.glb\", \"format\": \"glb\"},\n  \"context\": {\"engine\": \"UE5\", \"asset_role\": \"hero_character\"}\n}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "const e = pm.response.json();",
+        "pm.test('400 names the field', () => { pm.response.to.have.status(400); pm.expect(e.status).to.eql('error'); pm.expect(e.error.code).to.eql('MISSING_FIELD'); pm.expect(e.error.field).to.eql('context.platform'); });"
+      ] } }]
+    },
+    {
+      "name": "T3b unknown platform -> 422 INVALID_VALUE",
+      "request": {
+        "method": "POST", "url": "{{base_url}}/api/v1/assets/assess",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"request_id\": \"3f2b9c1e-7a44-4d0b-9c61-0d5e8a7b2f14\",\n  \"job_id\": \"job-0042\",\n  \"asset_id\": \"char_cat_01\",\n  \"timestamp\": \"2026-11-22T09:30:00Z\",\n  \"mesh\": {\"file_url\": \"samples/char_fixed.glb\", \"format\": \"glb\"},\n  \"context\": {\"platform\": \"Switch\", \"asset_role\": \"hero_character\"}\n}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('422 INVALID_VALUE', () => { pm.response.to.have.status(422); pm.expect(pm.response.json().error.code).to.eql('INVALID_VALUE'); });"
       ] } }]
     },
     {
       "name": "T4 image instead of mesh -> 415",
       "request": {
-        "method": "POST", "url": "{{base_url}}/v1/assess",
+        "method": "POST", "url": "{{base_url}}/api/v1/assets/assess",
         "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": { "mode": "raw", "raw": "{\n  \"asset_id\": \"concept\",\n  \"file_url\": \"samples/concept.png\",\n  \"context\": {\"platform\": \"PC\", \"engine\": \"UE5\", \"asset_role\": \"hero_character\"}\n}" }
+        "body": { "mode": "raw", "raw": "{\n  \"request_id\": \"3f2b9c1e-7a44-4d0b-9c61-0d5e8a7b2f15\",\n  \"job_id\": \"job-0042\",\n  \"asset_id\": \"concept\",\n  \"timestamp\": \"2026-11-22T09:30:00Z\",\n  \"mesh\": {\"file_url\": \"samples/concept.png\", \"format\": \"glb\"},\n  \"context\": {\"platform\": \"PC\", \"asset_role\": \"hero_character\"}\n}" }
       },
       "event": [{ "listen": "test", "script": { "exec": [
-        "pm.test('415', () => pm.response.to.have.status(415));"
+        "pm.test('415 UNSUPPORTED_FORMAT', () => { pm.response.to.have.status(415); pm.expect(pm.response.json().error.code).to.eql('UNSUPPORTED_FORMAT'); });"
       ] } }]
     },
     {
-      "name": "T5 mesh without UV -> 422",
+      "name": "T5 mesh without UV -> 422 MESH_HAS_NO_UV",
       "request": {
-        "method": "POST", "url": "{{base_url}}/v1/assess",
+        "method": "POST", "url": "{{base_url}}/api/v1/assets/assess",
         "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": { "mode": "raw", "raw": "{\n  \"asset_id\": \"no_uv\",\n  \"file_url\": \"samples/no_uv.glb\",\n  \"context\": {\"platform\": \"PC\", \"engine\": \"UE5\", \"asset_role\": \"hero_character\"}\n}" }
+        "body": { "mode": "raw", "raw": "{\n  \"request_id\": \"3f2b9c1e-7a44-4d0b-9c61-0d5e8a7b2f16\",\n  \"job_id\": \"job-0042\",\n  \"asset_id\": \"no_uv\",\n  \"timestamp\": \"2026-11-22T09:30:00Z\",\n  \"mesh\": {\"file_url\": \"samples/no_uv.glb\", \"format\": \"glb\"},\n  \"context\": {\"platform\": \"PC\", \"asset_role\": \"hero_character\"}\n}" }
       },
       "event": [{ "listen": "test", "script": { "exec": [
         "pm.test('422 MESH_HAS_NO_UV', () => { pm.response.to.have.status(422); pm.expect(pm.response.json().error.code).to.eql('MESH_HAS_NO_UV'); });"
       ] } }]
     },
     {
+      "name": "Feedback from TA -> 201",
+      "request": {
+        "method": "POST", "url": "{{base_url}}/api/v1/feedback",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"request_id\": \"3f2b9c1e-7a44-4d0b-9c61-0d5e8a7b2f12\",\n  \"asset_id\": \"char_cat_01\",\n  \"label\": \"wrong_pass\",\n  \"source\": \"ta_review\",\n  \"comment\": \"seam on the face\",\n  \"timestamp\": \"2026-11-22T10:05:00Z\"\n}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('201 recorded', () => { pm.response.to.have.status(201); pm.expect(pm.response.json().status).to.eql('recorded'); });"
+      ] } }]
+    },
+    {
       "name": "Create job (simulated agents) -> 202",
       "request": {
-        "method": "POST", "url": "{{base_url}}/v1/jobs",
+        "method": "POST", "url": "{{base_url}}/api/v1/jobs",
         "header": [{ "key": "Content-Type", "value": "application/json" }],
         "body": { "mode": "raw", "raw": "{\n  \"prompt\": \"chibi cat adventurer with a green beanie\",\n  \"context\": {\"platform\": \"PC\", \"engine\": \"UE5\", \"asset_role\": \"hero_character\"}\n}" }
       },
@@ -85,7 +122,7 @@
     },
     {
       "name": "Job progress (Production Tracker)",
-      "request": { "method": "GET", "url": "{{base_url}}/v1/jobs/{{job_id}}" },
+      "request": { "method": "GET", "url": "{{base_url}}/api/v1/jobs/{{job_id}}" },
       "event": [{ "listen": "test", "script": { "exec": [
         "pm.test('200 with stages', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().stages.length).to.be.above(0); });"
       ] } }]

@@ -43,7 +43,8 @@ class QAModel:
         order = {"high": 0, "medium": 1, "low": 2}
         return sorted(issues, key=lambda i: order[i["severity"]])
 
-    def assess(self, features: dict, platform: str, asset_role: str) -> dict:
+    def assess(self, features: dict, platform: str, asset_role: str,
+               explain: bool = True, top_k: int = 3) -> dict:
         missing = [f for f in MESH_FEATURES if f not in features]
         if missing:
             raise KeyError(f"missing features: {missing}")
@@ -51,8 +52,10 @@ class QAModel:
         X = pd.DataFrame([row])
         p_fail = float(self.pipeline.predict_proba(X)[0, 1])
         fail = p_fail >= self.threshold
-        sv, Xt = shap_values_for(self.pipeline, X, self.explainer)
-        reasons = top_reasons(sv.values[0], list(Xt.columns), X.iloc[0], fail)
+        reasons = []
+        if explain:
+            sv, Xt = shap_values_for(self.pipeline, X, self.explainer)
+            reasons = top_reasons(sv.values[0], list(Xt.columns), X.iloc[0], fail, k=top_k)
         issues = self.rule_issues(row)
         if fail and issues:
             next_action = {"agent": issues[0]["agent"], "task": issues[0]["task"]}

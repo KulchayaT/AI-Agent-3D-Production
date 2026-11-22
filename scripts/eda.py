@@ -10,7 +10,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
 
-from qa_model.config import DATA_PATH, MESH_FEATURES, REPORTS_DIR  # noqa: E402
+from qa_model.config import DATA_PATH, MESH_FEATURES, REPORTS_DIR, SPEC  # noqa: E402
 
 if __name__ == "__main__":
     df = pd.read_csv(DATA_PATH)
@@ -23,6 +23,13 @@ if __name__ == "__main__":
     by_source = df.groupby("source")["label"].agg(["count", "mean"]).rename(columns={"mean": "fail_rate"})
     print("\n== fail rate by source\n", by_source.round(3).to_string())
     print("\n== fail rate by platform\n", df.groupby("platform")["label"].mean().round(3).to_string())
+    print("\n== class distribution by asset role\n", pd.crosstab(df.asset_role, df.label, margins=True).to_string())
+    # share of assets that break each SPEC rule (which issue is most common -> which agent is busiest)
+    broken = {f: float(((df[f] > lim) if kind == "max" else (df[f] < lim)).mean())
+              for f, (kind, lim) in SPEC.items()}
+    broken = pd.Series(broken).sort_values()
+    print("\n== share of assets breaking each SPEC rule\n", broken.round(3).to_string())
+    print("\n== split used in training: train 80% =", int(len(df) * 0.8), "/ test 20% =", len(df) - int(len(df) * 0.8))
     corr = df[MESH_FEATURES + ["label"]].corr()["label"].drop("label").sort_values()
     print("\n== correlation with FAIL\n", corr.round(3).to_string())
 
@@ -42,4 +49,11 @@ if __name__ == "__main__":
         ax.legend()
     fig.tight_layout()
     fig.savefig(REPORTS_DIR / "eda_distributions.png", dpi=120)
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    pd.crosstab(df.source, df.label).rename(columns={0: "PASS", 1: "FAIL"}).plot.bar(
+        ax=axes[0], stacked=True, color=["#2F5FC4", "#E0703A"], title="Class distribution by source")
+    broken.plot.barh(ax=axes[1], color="#E0703A", title="Share of assets breaking each SPEC rule")
+    fig.tight_layout()
+    fig.savefig(REPORTS_DIR / "eda_class_distribution.png", dpi=120)
     print("\nplots saved to", REPORTS_DIR)

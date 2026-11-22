@@ -1,23 +1,29 @@
 # AI Agent 3D Production Studio — UV/Readiness QA Model
 
-BD532 Term Project (AI Independent Study) · Kulchaya Sinsiriwanich 68130014
+BD532 Preliminary Report (AI Independent Study) · Kulchaya Sinsiriwanich 68130014
 
 ทีม AI Agent 8 ตำแหน่งที่สร้างตัวละคร 3D จนใช้งานได้ใน Unreal Engine 5
-Repository นี้คือ **ส่วน ML ของระบบ (Section 3–4 ของรายงาน)**: โมเดลที่ตัดสินว่าโมเดล 3D
-"พร้อมเข้า Engine" หรือไม่ โดยเน้นปัญหา UV ที่ Tripo AI ยังทำได้ไม่ดี พร้อมอธิบายเหตุผลด้วย SHAP
-และบอกว่าควรส่งงานกลับให้ Agent ตัวไหนแก้
+Repository นี้คือโค้ดประกอบรายงาน: **AI Task 1 — UV/Readiness QA** (โมเดล ML ที่ตัดสินว่าโมเดล 3D
+"พร้อมเข้า Engine" หรือไม่ พร้อมเหตุผล SHAP และ Agent ที่ต้องแก้) และ API ตามที่ออกแบบใน **Section 4.1**
+ทีม Agent (AI Task 2) ถูกจำลองด้วย Job endpoint
 
 ```
-Customer -> Manager -> 2D Art Director -> 3D Modeler A (Lead) -> 3D Modeler B (Image-to-3D)
-         -> 3D Modeler C (UV + Texture) -> [UV/Readiness QA model]  <- this repo
-         -> Technical Artist A (Unreal import) -> Manager review -> Customer
+Customer -> Manager -> 2D Art Director -> Customer approves concept -> 3D Modeler A (check views)
+         -> 3D Modeler B (Image-to-3D) -> 3D Modeler C (UV + Texture) -> [AI Task 1: UV/Readiness QA]  <- this repo
+         -> Technical Artist A (Unreal import) -> Manager review -> Customer download + feedback
 ```
+
+| Report section | Code |
+| --- | --- |
+| 3.1 Basic input data exploration | `scripts/eda.py` → `reports/eda_*.png` |
+| 4.1 UI-Model interface design | `api/main.py`, `postman/`, `tests/test_api.py` |
+| Supporting (model behind the API) | `scripts/train.py` (4 versions in MLflow), `scripts/explain_model.py` (SHAP, fairness) |
 
 > **Proof of concept:** training data in `data/assets.csv` is **synthetic** (`qa_model/data.py`),
 > generated from the SPEC thresholds with simulated Technical-Artist disagreement. The feature
 > extractor is real and works on .glb/.gltf/.obj files; replace the synthetic rows with features
 > extracted from real Tripo outputs + TA labels in the IS phase. The agent pipeline behind
-> `/v1/jobs` is simulated.
+> `/api/v1/jobs` is simulated.
 
 ## Project layout
 
@@ -29,11 +35,11 @@ Customer -> Manager -> 2D Art Director -> 3D Modeler A (Lead) -> 3D Modeler B (I
 | `qa_model/explain.py`, `predict.py` | SHAP reasons in Thai, issues, next agent to call |
 | `qa_model/config.py` | SPEC thresholds, triangle/texture budgets per platform and asset role |
 | `scripts/` | `generate_data`, `eda`, `train`, `explain_model`, `make_samples` |
-| `api/main.py` | FastAPI service (`/v1/assess`, `/v1/jobs`, `/v1/health`) |
-| `postman/` | Postman collection for test scenarios T1–T5 |
-| `tests/` | pytest: feature extractor, data, API scenarios |
+| `api/main.py` | FastAPI service (`/api/v1/assets/assess`, `/api/v1/feedback`, `/api/v1/health`, `/api/v1/jobs`) |
+| `postman/` | Postman collection for the 4.1 scenarios |
+| `tests/` | pytest: feature extractor, data, API (23 tests) |
 | `samples/` | Test meshes: `char_fixed.glb`, `char_tripo_raw.glb`, `no_uv.glb` |
-| `reports/` | EDA plots, model comparison, confusion matrices, SHAP plots, fairness, 3 explained cases |
+| `reports/` | EDA plots, model comparison, confusion matrices, SHAP plots, fairness |
 | `models/qa_model.joblib` | Selected model |
 | `mlruns.db`, `mlruns/` | MLflow tracking store |
 
@@ -53,22 +59,32 @@ macOS / Linux: `python3 -m venv .venv && source .venv/bin/activate && pip instal
 
 ```powershell
 python scripts/generate_data.py     # data/assets.csv (1,400 rows)
-python scripts/eda.py               # 3.1 data exploration -> reports/eda_*.png
-python scripts/train.py             # 3.1 + 3.3 train 4 versions, log to MLflow, save best model
-python scripts/explain_model.py     # 3.2 fairness, 3.4 SHAP summary, 3.5 three explained cases
+python scripts/eda.py               # 3.1 data types, statistics, class distribution -> reports/eda_*.png
+python scripts/train.py             # train 4 versions, log to MLflow, save best model
+python scripts/explain_model.py     # fairness, SHAP summary, explained cases
 python scripts/make_samples.py      # sample meshes for the API tests
-pytest -q                           # unit + API tests (18 tests)
+pytest -q                           # unit + API tests (23 tests)
 ```
 
-MLflow UI (3.3):
+MLflow UI: `mlflow ui --backend-store-uri sqlite:///mlruns.db`, then open http://127.0.0.1:5000.
 
-```powershell
-mlflow ui --backend-store-uri sqlite:///mlruns.db
-```
+## 3.1 Data exploration (results of `scripts/eda.py`)
 
-then open http://127.0.0.1:5000 and the experiment `uv-readiness-qa`.
+1,400 assets, 16 features + label, no missing values, stratified split train 1,120 / test 280.
 
-## Results (synthetic data, test split 20% = 280 assets)
+| Source | Assets | FAIL | FAIL rate |
+| --- | --- | --- | --- |
+| tripo_raw | 350 | 304 | 86.9% |
+| tripo_fixed | 350 | 150 | 42.9% |
+| artist | 350 | 177 | 50.6% |
+| objaverse | 350 | 310 | 88.6% |
+| total | 1,400 | 941 | 67.2% |
+
+FAIL rate by platform: Mobile 84.5%, Console 69.0%, PC 58.3%. Most broken rules: texel density (39% of
+assets), UV overlap (37%), triangle budget (34%), fragmented islands (34%). Because predicting FAIL for
+everything already gives 67% accuracy, the model is judged by Recall(FAIL) per source, not accuracy.
+
+## Model behind the API (synthetic data, test split 20% = 280 assets)
 
 | Version | Features | Threshold | Test Recall (FAIL) | Test Precision | Test F1 | ROC AUC |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -77,18 +93,10 @@ then open http://127.0.0.1:5000 and the experiment `uv-readiness-qa`.
 | v3 XGBoost | mesh only | 0.29 | 0.957 | 0.729 | 0.828 | 0.766 |
 | **v4 XGBoost + context** | mesh + platform/role budgets | 0.24 | **0.936** | **0.834** | **0.882** | **0.808** |
 
-**Selected: v4.** Rule: best cross-validated F1 among versions with cross-validated Recall(FAIL) ≥ 0.90
-(the report's goal: never let a bad model reach the customer). Context matters because the same mesh can
-pass on PC and fail on Mobile: `tri_budget_ratio` is the strongest feature in the SHAP summary.
-Report goals met: Recall ≥ 0.90 and F1 ≥ 0.85. Not met yet: Cohen's kappa vs labels 0.59 (goal 0.7) —
-expected with simulated label noise; to be re-measured with real TA labels.
+Selected: v4 (best cross-validated F1 among versions with cross-validated Recall(FAIL) ≥ 0.90).
+Not met yet: Cohen's kappa 0.59 (goal 0.70), to be re-measured with real TA labels.
 
-Fairness (3.2, equal opportunity = Recall on FAIL per source): artist 0.87, objaverse 1.00,
-tripo_fixed 0.78, tripo_raw 1.00 → gap 0.22. The model misses more bad assets among already-fixed
-Tripo models, whose problems are subtler. Mitigation: per-source threshold or more labelled
-`tripo_fixed` examples. See `reports/fairness.csv`.
-
-## API (Section 4)
+## 4.1 API
 
 ```powershell
 uvicorn api.main:app --reload
@@ -96,85 +104,92 @@ uvicorn api.main:app --reload
 
 Swagger docs: http://127.0.0.1:8000/docs
 
-### `POST /v1/assess`
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| POST | `/api/v1/assets/assess` | Assess one 3D asset (mesh file or pre-computed features) + context |
+| POST | `/api/v1/feedback` | Record a TA / customer verdict → 201 |
+| GET | `/api/v1/health` | Model version and readiness |
+| POST | `/api/v1/jobs` | Start a production job (simulated agents) → 202 |
+| GET | `/api/v1/jobs/{job_id}` | Job progress for the Production Tracker |
 
-Request (send `file_url` **or** pre-computed `features`):
+### Request
 
 ```json
 {
-  "asset_id": "char_tripo_raw",
-  "file_url": "samples/char_tripo_raw.glb",
-  "context": { "platform": "PC", "engine": "UE5", "asset_role": "hero_character", "target_fps": 60 }
+  "request_id": "3f2b9c1e-7a44-4d0b-9c61-0d5e8a7b2f10",
+  "job_id": "job-0042",
+  "asset_id": "char_cat_01",
+  "timestamp": "2026-11-22T09:30:00Z",
+  "attempt": 1,
+  "mesh": { "file_url": "samples/char_tripo_raw.glb", "format": "glb" },
+  "context": { "platform": "PC", "engine": "UE5", "asset_role": "hero_character", "target_fps": 60 },
+  "options": { "explain": true, "top_k_reasons": 3 }
 }
 ```
 
-`platform`: `PC` | `Console` | `Mobile` · `asset_role`: `hero_character` | `npc_character` | `prop`.
-`file_url` is a local path (relative to this folder or absolute) to `.glb`, `.gltf` or `.obj`.
+Send `mesh` **or** `features` (the 12 mesh features already extracted by the Blender worker).
+`attempt` is 1–3 (SPEC-6 loop limit). `platform`: `PC` | `Console` | `Mobile`;
+`asset_role`: `hero_character` | `npc_character` | `prop`.
 
-Response 200 (shortened):
+### Response 200 (shortened)
 
 ```json
 {
-  "asset_id": "char_tripo_raw",
-  "status": "FAIL",
+  "request_id": "3f2b9c1e-7a44-4d0b-9c61-0d5e8a7b2f10",
+  "status": "ok",
+  "model_version": "v4_xgboost_context",
+  "verdict": "FAIL",
   "readiness_score": 13,
   "fail_probability": 0.8731,
-  "model_version": "v4_xgboost_context",
-  "issues": [
-    { "code": "UV_OVERLAP", "feature": "uv_overlap_pct", "severity": "high", "value": 92.9635, "limit": 1.0,
-      "agent": "3d_modeler_c", "task": "re_unwrap" },
-    { "code": "UV_FRAGMENTED", "feature": "islands_per_1k_tris", "severity": "high", "value": 1000.0, "limit": 8.0,
-      "agent": "3d_modeler_c", "task": "re_unwrap" }
-  ],
-  "reasons": [
-    { "feature": "seam_ratio", "value": 1.0, "shap": 0.6983, "text": "มี Seam มากเกินไป" },
-    { "feature": "uv_island_count", "value": 2304.0, "shap": 0.6389, "text": "จำนวน UV island สูง" },
-    { "feature": "uv_overlap_pct", "value": 92.9635, "shap": 0.5648, "text": "UV ทับกัน (overlap)" }
-  ],
-  "next_action": { "agent": "3d_modeler_c", "task": "re_unwrap" },
-  "needs_human_review": false,
-  "features": { "...": "all measured values" },
-  "latency_ms": 1039.3
+  "threshold": 0.24,
+  "issues": [{ "code": "UV_FRAGMENTED", "value": 1000.0, "limit": 8.0, "agent": "3d_modeler_c", "task": "re_unwrap" }],
+  "reasons": [{ "feature": "seam_ratio", "value": 1.0, "shap": 0.6983, "text": "มี Seam มากเกินไป" }],
+  "next_action": { "agent": "3d_modeler_c", "task": "re_unwrap", "recommended_action": "automate", "attempt": 1, "max_attempts": 3 },
+  "latency_ms": { "feature_extraction": 876.1, "inference_and_explain": 2008.6, "total": 2884.7 }
 }
 ```
 
-The first request takes about 1 s because the SHAP explainer is built; later requests are faster.
+`recommended_action` follows the report's presenting-intelligence rule: `annotate` (PASS, continue),
+`automate` (FAIL with a clear issue, send back to the agent, attempt < 3), `prompt` (unsure 0.35–0.65,
+or the third attempt → `status: needs_review`, human TA). The first request takes longer because the
+SHAP explainer is built.
 
-Errors always look like `{"error": {"code": "...", "message": "...", "details": ...}}`:
+### Errors
+
+One body shape: `{"request_id": "...", "status": "error", "error": {"code": "...", "message": "...", "field": "..."}}`
 
 | Status | Code | When |
 | --- | --- | --- |
-| 400 | `INVALID_PAYLOAD` | missing/invalid field (e.g. `context.platform`), or neither `file_url` nor `features` |
-| 404 | `FILE_NOT_FOUND` | `file_url` does not exist |
-| 415 | `UNSUPPORTED_FORMAT` | not .glb/.gltf/.obj (FBX: convert in the Blender worker first) |
-| 422 | `MESH_HAS_NO_UV` / `MESH_UNREADABLE` | mesh cannot be assessed |
+| 400 | `INVALID_JSON`, `MISSING_FIELD` | body is not JSON, a required field is missing, or neither `mesh` nor `features` |
+| 404 | `FILE_NOT_FOUND`, `JOB_NOT_FOUND` | file or job does not exist |
+| 413 | `FILE_TOO_LARGE` | mesh file over 50 MB (send `features` instead) |
+| 415 | `UNSUPPORTED_FORMAT` | not .glb/.gltf/.obj or does not match `mesh.format` |
+| 422 | `INVALID_VALUE`, `MESH_HAS_NO_UV`, `MESH_UNREADABLE` | value out of range / unknown enum, or the mesh cannot be assessed |
+| 500 | `INFERENCE_ERROR` | the model raised an exception |
 | 503 | `MODEL_NOT_READY` | `models/qa_model.joblib` missing |
 
-### `POST /v1/jobs` → 202, `GET /v1/jobs/{job_id}`
+### Postman
 
-Starts a production job and returns the stage of each agent for the Production Tracker screen.
-In this proof of concept the stages advance on a timer (3 s each); no real agents are called.
-
-### Test scenarios (4.2)
-
-Import `postman/AI-Agent-3D-Production.postman_collection.json` into Postman, start the API, run the
-collection. The same scenarios run in `tests/test_api.py`.
+Import `postman/AI-Agent-3D-Production.postman_collection.json`, start the API, run the collection.
+The same scenarios run in `tests/test_api.py`:
 
 | # | Scenario | Expected |
 | --- | --- | --- |
-| T1 | raw Tripo-like mesh (every triangle its own overlapping island) | 200 FAIL, `UV_FRAGMENTED`, next agent `3d_modeler_c` |
-| T2 | same mesh after a clean unwrap | 200 PASS, score ≥ 80 |
-| T3 | `context.platform` missing | 400 naming `context.platform` |
+| T1 | raw Tripo-like mesh | 200 FAIL, `UV_FRAGMENTED`, `automate` → `3d_modeler_c` |
+| T1b | same mesh, attempt 3 | `needs_review`, `prompt` |
+| T2 | same mesh after a clean unwrap | 200 PASS, score ≥ 80, `annotate` |
+| T3 | `context.platform` missing | 400 `MISSING_FIELD`, field `context.platform` |
+| T3b | `context.platform` = `Switch` | 422 `INVALID_VALUE` |
 | T4 | `.png` instead of a mesh | 415 |
 | T5 | mesh without UVs | 422 `MESH_HAS_NO_UV` |
+| — | feedback | 201 `recorded` |
 
 ## Scalability notes
 
-- The model is ~0.5 MB and runs on CPU; one assessment takes milliseconds. Feature extraction is the
-  slow part (pure numpy rasterisation, O(triangles)); for 50k+ triangle meshes move it to a worker queue
-  (Blender worker in the report architecture) and call `/v1/assess` with `features`.
-- The API is stateless except the in-memory job table; run several uvicorn workers behind a load
-  balancer and move jobs to a database / queue (Redis, Postgres) for production.
+- The model is ~0.5 MB and runs on CPU. Feature extraction is the slow part (pure numpy rasterisation,
+  O(triangles)); for 50k+ triangle meshes run it in the Blender worker and call the API with `features`.
+- The API is stateless except the in-memory job and feedback tables; run several uvicorn workers behind
+  a load balancer and move jobs/feedback to a database or queue (Postgres, Redis) for production.
 
 ## Data
 
