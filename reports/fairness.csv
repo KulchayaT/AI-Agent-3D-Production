@@ -1,0 +1,8 @@
+group,value,n,fail_rate,recall_fail,f1_fail
+source,artist,72,0.431,0.871,0.794
+source,objaverse,78,0.897,1.0,0.946
+source,tripo_fixed,67,0.537,0.778,0.812
+source,tripo_raw,63,0.81,1.0,0.895
+platform,Console,68,0.721,0.898,0.88
+platform,Mobile,63,0.81,1.0,0.903
+platform,PC,149,0.591,0.92,0.871

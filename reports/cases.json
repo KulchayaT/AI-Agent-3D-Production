@@ -1,0 +1,160 @@
+{
+  "case1_tripo_raw": {
+    "asset_id": "asset_00291",
+    "source": "tripo_raw",
+    "platform": "PC",
+    "asset_role": "prop",
+    "true_label": "FAIL",
+    "status": "FAIL",
+    "readiness_score": 33,
+    "issues": [
+      {
+        "code": "UV_OVERLAP",
+        "feature": "uv_overlap_pct",
+        "severity": "high",
+        "value": 1.5521,
+        "limit": 1.0,
+        "agent": "3d_modeler_c",
+        "task": "re_unwrap"
+      },
+      {
+        "code": "UV_FRAGMENTED",
+        "feature": "islands_per_1k_tris",
+        "severity": "high",
+        "value": 30.9209,
+        "limit": 8.0,
+        "agent": "3d_modeler_c",
+        "task": "re_unwrap"
+      },
+      {
+        "code": "TEXEL_DENSITY_UNEVEN",
+        "feature": "texel_density_cv",
+        "severity": "medium",
+        "value": 0.2692,
+        "limit": 0.25,
+        "agent": "3d_modeler_c",
+        "task": "re_pack_uv"
+      },
+      {
+        "code": "TOO_MANY_SEAMS",
+        "feature": "seam_ratio",
+        "severity": "medium",
+        "value": 0.1908,
+        "limit": 0.15,
+        "agent": "3d_modeler_c",
+        "task": "re_unwrap"
+      }
+    ],
+    "reasons": [
+      {
+        "feature": "texel_density_cv",
+        "value": 0.2692,
+        "shap": 0.78,
+        "text": "ความละเอียด Texture ไม่เท่ากันทั้งตัว"
+      },
+      {
+        "feature": "uv_overlap_pct",
+        "value": 1.5521,
+        "shap": 0.435,
+        "text": "UV ทับกัน (overlap)"
+      },
+      {
+        "feature": "tri_budget_ratio",
+        "value": 0.5423,
+        "shap": 0.4277,
+        "text": "Triangle อยู่ใน Budget (0.54 / เกณฑ์ 1.0) แต่ยังดันผลไปทาง FAIL"
+      }
+    ],
+    "next_action": {
+      "agent": "3d_modeler_c",
+      "task": "re_unwrap"
+    }
+  },
+  "case2_after_modeler_c": {
+    "asset_id": "asset_00454",
+    "source": "tripo_fixed",
+    "platform": "PC",
+    "asset_role": "hero_character",
+    "true_label": "PASS",
+    "status": "PASS",
+    "readiness_score": 92,
+    "issues": [],
+    "reasons": [
+      {
+        "feature": "uv_overlap_pct",
+        "value": 0.0773,
+        "shap": -0.912,
+        "text": "UV ไม่ทับกัน"
+      },
+      {
+        "feature": "tri_budget_ratio",
+        "value": 0.7144,
+        "shap": -0.8364,
+        "text": "Triangle อยู่ใน Budget"
+      },
+      {
+        "feature": "texel_density_cv",
+        "value": 0.1319,
+        "shap": -0.4091,
+        "text": "Texel density สม่ำเสมอ"
+      }
+    ],
+    "next_action": {
+      "agent": "technical_artist_a",
+      "task": "import_to_unreal"
+    }
+  },
+  "case3_mobile_prop": {
+    "asset_id": "asset_00675",
+    "source": "tripo_fixed",
+    "platform": "Mobile",
+    "asset_role": "prop",
+    "true_label": "PASS",
+    "status": "FAIL",
+    "readiness_score": 11,
+    "issues": [
+      {
+        "code": "OVER_TRI_BUDGET",
+        "feature": "tri_budget_ratio",
+        "severity": "high",
+        "value": 2.372,
+        "limit": 1.0,
+        "agent": "technical_artist_a",
+        "task": "reduce_polycount"
+      },
+      {
+        "code": "OVER_TEXTURE_BUDGET",
+        "feature": "texture_budget_ratio",
+        "severity": "medium",
+        "value": 2.0,
+        "limit": 1.0,
+        "agent": "technical_artist_a",
+        "task": "downscale_textures"
+      }
+    ],
+    "reasons": [
+      {
+        "feature": "tri_budget_ratio",
+        "value": 2.372,
+        "shap": 1.9295,
+        "text": "Triangle เกิน Budget ของ Platform"
+      },
+      {
+        "feature": "uv_stretch",
+        "value": 0.0696,
+        "shap": 0.6425,
+        "text": "UV ไม่ยืด (0.07 / เกณฑ์ 0.15) แต่ยังดันผลไปทาง FAIL"
+      },
+      {
+        "feature": "texture_budget_ratio",
+        "value": 2.0,
+        "shap": 0.4787,
+        "text": "Texture ใหญ่เกิน Budget ของ Platform"
+      }
+    ],
+    "next_action": {
+      "agent": "technical_artist_a",
+      "task": "reduce_polycount"
+    }
+  }
+}

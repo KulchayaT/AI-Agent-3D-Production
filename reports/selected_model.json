@@ -1,0 +1,16 @@
+{
+  "version": "v4_xgboost_context",
+  "threshold": 0.24,
+  "cv_recall_fail": 0.9469,
+  "cv_precision_fail": 0.8438,
+  "cv_f1_fail": 0.8924,
+  "cv_accuracy": 0.8464,
+  "cv_roc_auc": 0.8331,
+  "cv_kappa": 0.6275,
+  "test_recall_fail": 0.9362,
+  "test_precision_fail": 0.8341,
+  "test_f1_fail": 0.8822,
+  "test_accuracy": 0.8321,
+  "test_roc_auc": 0.8079,
+  "test_kappa": 0.5936
+}
